@@ -147,7 +147,7 @@ void main(void)
 
 	
     vec4 res;
-    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;
+    res.xyz = (1.0 - source.a) * Cb + source.a * Cm;
     res.a = source.a + target.a * (1.0-source.a);
     gl_FragColor = vec4(res.xyz * res.a, res.a);
 }

@@ -25,9 +25,10 @@ void main(void)
     if (target.a > 0.0) {
         Cb = target.rgb / target.a;
 	}
-    vec3 darken = min(Cb, Cs);
+    vec3 Cm = min(Cb, Cs);
+	
     vec4 res;
-    res.xyz = (1.0 - source.a) * Cs + source.a * darken;
+    res.xyz = (1.0 - source.a) * Cb + source.a * Cm;
     res.a = source.a + target.a * (1.0-source.a);
     gl_FragColor = vec4(res.xyz * res.a, res.a);
 }
