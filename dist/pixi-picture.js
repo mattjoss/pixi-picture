@@ -10,6 +10,111 @@ var __extends = (this && this.__extends) || (function () {
 })();
 var pixi_picture;
 (function (pixi_picture) {
+    var shaderLib = [
+        {
+            vertUniforms: "",
+            vertCode: "vTextureCoord = aTextureCoord;",
+            fragUniforms: "uniform vec4 uTextureClamp;",
+            fragCode: "vec2 textureCoord = clamp(vTextureCoord, uTextureClamp.xy, uTextureClamp.zw);"
+        },
+        {
+            vertUniforms: "uniform mat3 uTransform;",
+            vertCode: "vTextureCoord = (uTransform * vec3(aTextureCoord, 1.0)).xy;",
+            fragUniforms: "",
+            fragCode: "vec2 textureCoord = vTextureCoord;"
+        },
+        {
+            vertUniforms: "uniform mat3 uTransform;",
+            vertCode: "vTextureCoord = (uTransform * vec3(aTextureCoord, 1.0)).xy;",
+            fragUniforms: "uniform mat3 uMapCoord;\nuniform vec4 uClampFrame;\nuniform vec2 uClampOffset;",
+            fragCode: "vec2 textureCoord = mod(vTextureCoord - uClampOffset, vec2(1.0, 1.0)) + uClampOffset;" +
+                "\ntextureCoord = (uMapCoord * vec3(textureCoord, 1.0)).xy;" +
+                "\ntextureCoord = clamp(textureCoord, uClampFrame.xy, uClampFrame.zw);"
+        }
+    ];
+    var PictureShader = (function (_super) {
+        __extends(PictureShader, _super);
+        function PictureShader(gl, vert, frag, tilingMode) {
+            var _this = this;
+            var lib = shaderLib[tilingMode];
+            _this = _super.call(this, gl, vert.replace(/%SPRITE_UNIFORMS%/gi, lib.vertUniforms)
+                .replace(/%SPRITE_CODE%/gi, lib.vertCode), frag.replace(/%SPRITE_UNIFORMS%/gi, lib.fragUniforms)
+                .replace(/%SPRITE_CODE%/gi, lib.fragCode)) || this;
+            _this.bind();
+            _this.tilingMode = tilingMode;
+            _this.tempQuad = new PIXI.Quad(gl);
+            _this.tempQuad.initVao(_this);
+            _this.uniforms.uColor = new Float32Array([1, 1, 1, 1]);
+            _this.uniforms.uSampler = [0, 1];
+            return _this;
+        }
+        PictureShader.blendVert = "\nattribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\nattribute vec4 aColor;\n\nuniform mat3 projectionMatrix;\nuniform mat3 mapMatrix;\n\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    %SPRITE_CODE%\n    vMapCoord = (mapMatrix * vec3(aVertexPosition, 1.0)).xy;\n}\n";
+        return PictureShader;
+    }(PIXI.Shader));
+    pixi_picture.PictureShader = PictureShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    //reverse hardlight\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from https://drafts.fxtf.org/compositing/#blendingcolor\n\t// if(Cb == 1)\n\t//     B(Cb, Cs) = 1\n\t// else if(Cs == 0)\n\t//     B(Cb, Cs) = 0\n\t// else\n\t//     B(Cb, Cs) = 1 - min(1, (1 - Cb) / Cs)\n\n\tvec3 Cm;\n\n\t// Can these be combined?\n\t// red\n\tif (Cb.r == 1.0) {\n\t\tCm.r = 1.0;\n\t} else if (Cs.r == 0.0) {\n\t\tCm.r = 0.0;\n\t} else {\n\t\tCm.r = 1.0 - min(1.0, (1.0 - Cb.r) / Cs.r);\n\t}\n\n\t// green\n\tif (Cb.g == 1.0) {\n\t\tCm.g = 1.0;\n\t} else if (Cs.g == 0.0) {\n\t\tCm.g = 0.0;\n\t} else {\n\t\tCm.g = 1.0 - min(1.0, (1.0 - Cb.g) / Cs.g);\n\t}\n\n\t//blue\n\tif (Cb.b == 1.0) {\n\t\tCm.b = 1.0;\n\t} else if (Cs.b == 0.0) {\n\t\tCm.b = 0.0;\n\t} else {\n\t\tCm.b = 1.0 - min(1.0, (1.0 - Cb.b) / Cs.b);\n\t}\n\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var ColorBurnShader = (function (_super) {
+        __extends(ColorBurnShader, _super);
+        function ColorBurnShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return ColorBurnShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.ColorBurnShader = ColorBurnShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from https://drafts.fxtf.org/compositing/#blendingcolor\n\t// if(Cb == 0)\n\t//     B(Cb, Cs) = 0\n\t// else if(Cs == 1)\n\t//     B(Cb, Cs) = 1\n\t// else\n\t// \tB(Cb, Cs) = min(1.0, Cb / (1.0 - Cs))\n\n\n\tvec3 Cm;\n\n\t// Can these be combined?\n\t// red\n\tif (Cb.r == 0.0) {\n\t\tCm.r = 0.0;\n\t} else if (Cs.r == 1.0) {\n\t\tCm.r = 1.0;\n\t} else {\n\t\tCm.r = min(1.0, Cb.r / (1.0-Cs.r));\n\t}\n\n\t// green\n\tif (Cb.g == 0.0) {\n\t\tCm.g = 0.0;\n\t} else if (Cs.g == 1.0) {\n\t\tCm.g = 1.0;\n\t} else {\n\t\tCm.g = min(1.0, Cb.g / (1.0-Cs.g));\n\t}\n\n\t//blue\n\tif (Cb.b == 0.0) {\n\t\tCm.b = 0.0;\n\t} else if (Cs.b == 1.0) {\n\t\tCm.b = 1.0;\n\t} else {\n\t\tCm.b = min(1.0, Cb.b / (1.0-Cs.b));\n\t}\n\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var ColorDodgeShader = (function (_super) {
+        __extends(ColorDodgeShader, _super);
+        function ColorDodgeShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return ColorDodgeShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.ColorDodgeShader = ColorDodgeShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\n// Functions from https://drafts.fxtf.org/compositing/#blendingcolor\nfloat Lum(vec3 C) {\n\tfloat lum = 0.3 * C.r + 0.59 * C.g + 0.11 * C.b;\n\treturn lum;\n}\n\n\nvec3 ClipColor(vec3 C) {\n\tfloat L = Lum(C);\n\tfloat n = min(C.r, min(C.g, C.b));\n\tfloat x = max(C.r, max(C.g, C.b));\n\tif (n < 0.0) {\n\t\tC = L + (((C - L) * L) / (L - n));\n\t}\n\tif(x > 1.0) {\n\t\tC = L + (((C - L) * (1.0 - L)) / (x - L));\n\t}\n\treturn C;\n}\n\nvec3 SetLum(vec3 C, float l) {\n\tfloat d = l - Lum(C);\n\tC.r = C.r + d;\n\tC.g = C.g + d;\n\tC.b = C.b + d;\n\treturn ClipColor(C);\n}\n\t\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    //reverse hardlight\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from https://drafts.fxtf.org/compositing/#blendingcolor\n\t// SetLum(Cs, Lum(Cb))\n\n\tvec3 Cm = SetLum(Cs, Lum(Cb));\n\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var ColorShader = (function (_super) {
+        __extends(ColorShader, _super);
+        function ColorShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return ColorShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.ColorShader = ColorShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n    vec3 darken = min(Cb, Cs);\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * darken;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var DarkenShader = (function (_super) {
+        __extends(DarkenShader, _super);
+        function DarkenShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return DarkenShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.DarkenShader = DarkenShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// B(Cb, Cs) = | Cb - Cs |\n\t\n\tvec3 Cm = abs(Cb - Cs);\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var DifferenceShader = (function (_super) {
+        __extends(DifferenceShader, _super);
+        function DifferenceShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return DifferenceShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.DifferenceShader = DifferenceShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
     function filterManagerMixin(fm) {
         if (fm.prepareBackdrop)
             return;
@@ -260,51 +365,6 @@ var pixi_picture;
 })(pixi_picture || (pixi_picture = {}));
 var pixi_picture;
 (function (pixi_picture) {
-    var shaderLib = [
-        {
-            vertUniforms: "",
-            vertCode: "vTextureCoord = aTextureCoord;",
-            fragUniforms: "uniform vec4 uTextureClamp;",
-            fragCode: "vec2 textureCoord = clamp(vTextureCoord, uTextureClamp.xy, uTextureClamp.zw);"
-        },
-        {
-            vertUniforms: "uniform mat3 uTransform;",
-            vertCode: "vTextureCoord = (uTransform * vec3(aTextureCoord, 1.0)).xy;",
-            fragUniforms: "",
-            fragCode: "vec2 textureCoord = vTextureCoord;"
-        },
-        {
-            vertUniforms: "uniform mat3 uTransform;",
-            vertCode: "vTextureCoord = (uTransform * vec3(aTextureCoord, 1.0)).xy;",
-            fragUniforms: "uniform mat3 uMapCoord;\nuniform vec4 uClampFrame;\nuniform vec2 uClampOffset;",
-            fragCode: "vec2 textureCoord = mod(vTextureCoord - uClampOffset, vec2(1.0, 1.0)) + uClampOffset;" +
-                "\ntextureCoord = (uMapCoord * vec3(textureCoord, 1.0)).xy;" +
-                "\ntextureCoord = clamp(textureCoord, uClampFrame.xy, uClampFrame.zw);"
-        }
-    ];
-    var PictureShader = (function (_super) {
-        __extends(PictureShader, _super);
-        function PictureShader(gl, vert, frag, tilingMode) {
-            var _this = this;
-            var lib = shaderLib[tilingMode];
-            _this = _super.call(this, gl, vert.replace(/%SPRITE_UNIFORMS%/gi, lib.vertUniforms)
-                .replace(/%SPRITE_CODE%/gi, lib.vertCode), frag.replace(/%SPRITE_UNIFORMS%/gi, lib.fragUniforms)
-                .replace(/%SPRITE_CODE%/gi, lib.fragCode)) || this;
-            _this.bind();
-            _this.tilingMode = tilingMode;
-            _this.tempQuad = new PIXI.Quad(gl);
-            _this.tempQuad.initVao(_this);
-            _this.uniforms.uColor = new Float32Array([1, 1, 1, 1]);
-            _this.uniforms.uSampler = [0, 1];
-            return _this;
-        }
-        PictureShader.blendVert = "\nattribute vec2 aVertexPosition;\nattribute vec2 aTextureCoord;\nattribute vec4 aColor;\n\nuniform mat3 projectionMatrix;\nuniform mat3 mapMatrix;\n\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    gl_Position = vec4((projectionMatrix * vec3(aVertexPosition, 1.0)).xy, 0.0, 1.0);\n    %SPRITE_CODE%\n    vMapCoord = (mapMatrix * vec3(aVertexPosition, 1.0)).xy;\n}\n";
-        return PictureShader;
-    }(PIXI.Shader));
-    pixi_picture.PictureShader = PictureShader;
-})(pixi_picture || (pixi_picture = {}));
-var pixi_picture;
-(function (pixi_picture) {
     var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    //reverse hardlight\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cb = source.rgb/source.a, Cs;\n    if (target.a > 0.0) {\n        Cs = target.rgb / target.a;\n    }\n    vec3 multiply = Cb * Cs * 2.0;\n    vec3 Cs2 = Cs * 2.0 - 1.0;\n    vec3 screen = Cb + Cs2 - Cb * Cs2;\n    vec3 B;\n    if (Cb.r <= 0.5) {\n        B.r = multiply.r;\n    } else {\n        B.r = screen.r;\n    }\n    if (Cb.g <= 0.5) {\n        B.g = multiply.g;\n    } else {\n        B.g = screen.g;\n    }\n    if (Cb.b <= 0.5) {\n        B.b = multiply.b;\n    } else {\n        B.b = screen.b;\n    }\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * B;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
     var HardLightShader = (function (_super) {
         __extends(HardLightShader, _super);
@@ -317,11 +377,98 @@ var pixi_picture;
 })(pixi_picture || (pixi_picture = {}));
 var pixi_picture;
 (function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\n// Functions from https://drafts.fxtf.org/compositing/#blendingcolor\nfloat Lum(vec3 C) {\n\tfloat lum = 0.3 * C.r + 0.59 * C.g + 0.11 * C.b;\n\treturn lum;\n}\n\n\nvec3 ClipColor(vec3 C) {\n\tfloat L = Lum(C);\n\tfloat n = min(C.r, min(C.g, C.b));\n\tfloat x = max(C.r, max(C.g, C.b));\n\tif (n < 0.0) {\n\t\tC = L + (((C - L) * L) / (L - n));\n\t}\n\tif(x > 1.0) {\n\t\tC = L + (((C - L) * (1.0 - L)) / (x - L));\n\t}\n\treturn C;\n}\n\nvec3 SetLum(vec3 C, float l) {\n\tfloat d = l - Lum(C);\n\tC.r = C.r + d;\n\tC.g = C.g + d;\n\tC.b = C.b + d;\n\treturn ClipColor(C);\n}\n\nfloat Sat(vec3 C) {\n\treturn (max(C.r, max(C.g, C.b)) - min(C.r, min(C.g, C.b)));\n}\n\n// Find middle number of 3 numbers\nfloat middleOfThree(float a, float b, float c)\n{\n    if (a > b)\n    {\n\t\tif (b > c) {\n            return b;\n\t\t} else if (a > c) {\n            return c;\n\t\t} else {\n            return a;\n\t\t}\n    }\n    else\n    {\n\t\tif (a > c) {\n            return a;\n\t\t} else if (b > c) {\n            return c;\n\t\t} else {\n            return b;\n\t\t}\n    }\n}\n\nvec3 SetSat(vec3 C, float s) {\n\tfloat Cmax = max(C.r, max(C.g, C.b));\n\tfloat Cmin = min(C.r, min(C.g, C.b));\n\tfloat Cmid = middleOfThree(C.r, C.g, C.b);\n\n\tint minIndex, midIndex, maxIndex;\n\n\tif (Cmax > Cmin) {\n\t\tCmid = (((Cmid - Cmin) * s) / (Cmax - Cmin));\n\t\tCmax = s;\n\t} else {\n\t\tCmid = Cmax = 0.0;\n\t}\n\tCmin = 0.0;\n\n\tif (C.r < C.g) {\n\t\tif (C.r < C.b) {\n\t\t\tC.r = Cmin;\n\t\t\tif (C.g > C.b) {\n\t\t\t\tC.g = Cmax;\n\t\t\t\tC.b = Cmid;\n\t\t\t} else {\n\t\t\t\tC.g = Cmid;\n\t\t\t\tC.b = Cmax;\n\t\t\t}\n\t\t} else {\n\t\t\tC.r = Cmid;\n\t\t\tif (C.g < C.b) {\n\t\t\t\tC.g = Cmin;\n\t\t\t\tC.b = Cmax;\n\t\t\t} else {\n\t\t\t\tC.g = Cmax;\n\t\t\t\tC.b = Cmin;\n\t\t\t}\n\t\t}\n\t} else {\n\t\tif (C.r < C.b) {\n\t\t\tC.r = Cmid;\n\t\t\tC.g = Cmin;\n\t\t\tC.b = Cmax;\n\t\t} else {\n\t\t\tif (C.g > C.b) {\n\t\t\t\tC.g = Cmid;\n\t\t\t\tC.b = Cmin;\n\t\t\t} else {\n\t\t\t\tC.g = Cmin;\n\t\t\t\tC.b = Cmid;\n\t\t\t}\n\t\t\tC.r = Cmax;\n\t\t}\n\t}\n\n\treturn C;\n}\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    //reverse hardlight\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from https://drafts.fxtf.org/compositing/#blendingcolor\n\t// B(Cb, Cs) = SetLum(SetSat(Cs, Sat(Cb)), Lum(Cb))\n\n\tvec3 Cm = SetLum(SetSat(Cs, Sat(Cb)), Lum(Cb));\n\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var HueShader = (function (_super) {
+        __extends(HueShader, _super);
+        function HueShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return HueShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.HueShader = HueShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\tvec3 Cm = max(Cb, Cs);\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var LightenShader = (function (_super) {
+        __extends(LightenShader, _super);
+        function LightenShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return LightenShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.LightenShader = LightenShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from here http://www.simplefilter.de/en/basics/mixmods.html\n\t// C = A + B - 1\n\tvec3 Cm = Cs + Cb - 1.0;\n\t\n\t\n\tvec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var LinearBurnShader = (function (_super) {
+        __extends(LinearBurnShader, _super);
+        function LinearBurnShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return LinearBurnShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.LinearBurnShader = LinearBurnShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from here http://www.simplefilter.de/en/basics/mixmods.html\n\t// C = A + B\n\tvec3 Cm = Cs + Cb;\n\t\n\t\n\tvec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var LinearDodgeShader = (function (_super) {
+        __extends(LinearDodgeShader, _super);
+        function LinearDodgeShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return LinearDodgeShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.LinearDodgeShader = LinearDodgeShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from here http://www.simplefilter.de/en/basics/mixmods.html\n\t// C = B + 2*A - 1\n\tvec3 Cm = Cb + 2.0 * Cs - 1.0;\n\t\n\t\n\tvec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var LinearLightShader = (function (_super) {
+        __extends(LinearLightShader, _super);
+        function LinearLightShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return LinearLightShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.LinearLightShader = LinearLightShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\n// Functions from https://drafts.fxtf.org/compositing/#blendingcolor\nfloat Lum(vec3 C) {\n\tfloat lum = 0.3 * C.r + 0.59 * C.g + 0.11 * C.b;\n\treturn lum;\n}\n\n\nvec3 ClipColor(vec3 C) {\n\tfloat L = Lum(C);\n\tfloat n = min(C.r, min(C.g, C.b));\n\tfloat x = max(C.r, max(C.g, C.b));\n\tif (n < 0.0) {\n\t\tC = L + (((C - L) * L) / (L - n));\n\t}\n\tif(x > 1.0) {\n\t\tC = L + (((C - L) * (1.0 - L)) / (x - L));\n\t}\n\treturn C;\n}\n\nvec3 SetLum(vec3 C, float l) {\n\tfloat d = l - Lum(C);\n\tC.r = C.r + d;\n\tC.g = C.g + d;\n\tC.b = C.b + d;\n\treturn ClipColor(C);\n}\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    //reverse hardlight\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from https://drafts.fxtf.org/compositing/#blendingcolor\n\t// SetLum(Cb, Lum(Cs))\n\n\tvec3 Cm = SetLum(Cb, Lum(Cs));\n\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var LuminosityShader = (function (_super) {
+        __extends(LuminosityShader, _super);
+        function LuminosityShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return LuminosityShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.LuminosityShader = LuminosityShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
     function mapFilterBlendModesToPixi(gl, array) {
         if (array === void 0) { array = []; }
+        PIXI.BLEND_MODES.LINEAR_DODGE = 20;
+        PIXI.BLEND_MODES.LINEAR_BURN = 21;
+        PIXI.BLEND_MODES.LINEAR_LIGHT = 22;
         array[PIXI.BLEND_MODES.OVERLAY] = [new pixi_picture.OverlayShader(gl, 0), new pixi_picture.OverlayShader(gl, 1), new pixi_picture.OverlayShader(gl, 2)];
         array[PIXI.BLEND_MODES.HARD_LIGHT] = [new pixi_picture.HardLightShader(gl, 0), new pixi_picture.HardLightShader(gl, 1), new pixi_picture.HardLightShader(gl, 2)];
         array[PIXI.BLEND_MODES.SOFT_LIGHT] = [new pixi_picture.SoftLightShader(gl, 0), new pixi_picture.SoftLightShader(gl, 1), new pixi_picture.SoftLightShader(gl, 2)];
+        array[PIXI.BLEND_MODES.DARKEN] = [new pixi_picture.DarkenShader(gl, 0), new pixi_picture.DarkenShader(gl, 1), new pixi_picture.DarkenShader(gl, 2)];
+        array[PIXI.BLEND_MODES.LIGHTEN] = [new pixi_picture.LightenShader(gl, 0), new pixi_picture.LightenShader(gl, 1), new pixi_picture.LightenShader(gl, 2)];
+        array[PIXI.BLEND_MODES.COLOR_DODGE] = [new pixi_picture.ColorDodgeShader(gl, 0), new pixi_picture.ColorDodgeShader(gl, 1), new pixi_picture.ColorDodgeShader(gl, 2)];
+        array[PIXI.BLEND_MODES.COLOR_BURN] = [new pixi_picture.ColorBurnShader(gl, 0), new pixi_picture.ColorBurnShader(gl, 1), new pixi_picture.ColorBurnShader(gl, 2)];
+        array[PIXI.BLEND_MODES.COLOR] = [new pixi_picture.ColorShader(gl, 0), new pixi_picture.ColorBurnShader(gl, 1), new pixi_picture.ColorBurnShader(gl, 2)];
+        array[PIXI.BLEND_MODES.LUMINOSITY] = [new pixi_picture.LuminosityShader(gl, 0), new pixi_picture.LuminosityShader(gl, 1), new pixi_picture.LuminosityShader(gl, 2)];
+        array[PIXI.BLEND_MODES.LINEAR_DODGE] = [new pixi_picture.LinearDodgeShader(gl, 0), new pixi_picture.LinearDodgeShader(gl, 1), new pixi_picture.LinearDodgeShader(gl, 2)];
+        array[PIXI.BLEND_MODES.LINEAR_BURN] = [new pixi_picture.LinearBurnShader(gl, 0), new pixi_picture.LinearBurnShader(gl, 1), new pixi_picture.LinearBurnShader(gl, 2)];
+        array[PIXI.BLEND_MODES.LINEAR_LIGHT] = [new pixi_picture.LinearLightShader(gl, 0), new pixi_picture.LinearLightShader(gl, 1), new pixi_picture.LinearLightShader(gl, 2)];
+        array[PIXI.BLEND_MODES.HUE] = [new pixi_picture.HueShader(gl, 0), new pixi_picture.HueShader(gl, 1), new pixi_picture.HueShader(gl, 2)];
+        array[PIXI.BLEND_MODES.SATURATION] = [new pixi_picture.SaturationShader(gl, 0), new pixi_picture.SaturationShader(gl, 1), new pixi_picture.SaturationShader(gl, 2)];
+        array[PIXI.BLEND_MODES.DIFFERENCE] = [new pixi_picture.DifferenceShader(gl, 0), new pixi_picture.DifferenceShader(gl, 1), new pixi_picture.DifferenceShader(gl, 2)];
         return array;
     }
     pixi_picture.mapFilterBlendModesToPixi = mapFilterBlendModesToPixi;
@@ -639,7 +786,19 @@ var pixi_picture;
 })(pixi_picture || (pixi_picture = {}));
 var pixi_picture;
 (function (pixi_picture) {
-    var softLightFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n \nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    vec3 Cb = source.rgb/source.a, Cs;\n    if (target.a > 0.0) {\n        Cs = target.rgb / target.a;\n    }\n    \n    vec3 first = Cb - (1.0 - 2.0 * Cs) * Cb * (1.0 - Cb);\n\n    vec3 B;\n    vec3 D;\n    if (Cs.r <= 0.5)\n    {\n        B.r = first.r;\n    }\n    else\n    {\n        if (Cb.r <= 0.25)\n        {\n            D.r = ((16.0 * Cb.r - 12.0) * Cb.r + 4.0) * Cb.r;    \n        }\n        else\n        {\n            D.r = sqrt(Cb.r);\n        }\n        B.r = Cb.r + (2.0 * Cs.r - 1.0) * (D.r - Cb.r);\n    }\n    if (Cs.g <= 0.5)\n    {\n        B.g = first.g;\n    }\n    else\n    {\n        if (Cb.g <= 0.25)\n        {\n            D.g = ((16.0 * Cb.g - 12.0) * Cb.g + 4.0) * Cb.g;    \n        }\n        else\n        {\n            D.g = sqrt(Cb.g);\n        }\n        B.g = Cb.g + (2.0 * Cs.g - 1.0) * (D.g - Cb.g);\n    }\n    if (Cs.b <= 0.5)\n    {\n        B.b = first.b;\n    }\n    else\n    {\n        if (Cb.b <= 0.25)\n        {\n            D.b = ((16.0 * Cb.b - 12.0) * Cb.b + 4.0) * Cb.b;    \n        }\n        else\n        {\n            D.b = sqrt(Cb.b);\n        }\n        B.b = Cb.b + (2.0 * Cs.b - 1.0) * (D.b - Cb.b);\n    }   \n\n    vec4 res;\n\n    res.xyz = (1.0 - source.a) * Cs + source.a * B;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var overlayFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\n// Functions from https://drafts.fxtf.org/compositing/#blendingcolor\nfloat Lum(vec3 C) {\n\tfloat lum = 0.3 * C.r + 0.59 * C.g + 0.11 * C.b;\n\treturn lum;\n}\n\n\nvec3 ClipColor(vec3 C) {\n\tfloat L = Lum(C);\n\tfloat n = min(C.r, min(C.g, C.b));\n\tfloat x = max(C.r, max(C.g, C.b));\n\tif (n < 0.0) {\n\t\tC = L + (((C - L) * L) / (L - n));\n\t}\n\tif(x > 1.0) {\n\t\tC = L + (((C - L) * (1.0 - L)) / (x - L));\n\t}\n\treturn C;\n}\n\nvec3 SetLum(vec3 C, float l) {\n\tfloat d = l - Lum(C);\n\tC.r = C.r + d;\n\tC.g = C.g + d;\n\tC.b = C.b + d;\n\treturn ClipColor(C);\n}\n\nfloat Sat(vec3 C) {\n\treturn (max(C.r, max(C.g, C.b)) - min(C.r, min(C.g, C.b)));\n}\n\n// Find middle number of 3 numbers\nfloat middleOfThree(float a, float b, float c)\n{\n    if (a > b)\n    {\n\t\tif (b > c) {\n            return b;\n\t\t} else if (a > c) {\n            return c;\n\t\t} else {\n            return a;\n\t\t}\n    }\n    else\n    {\n\t\tif (a > c) {\n            return a;\n\t\t} else if (b > c) {\n            return c;\n\t\t} else {\n            return b;\n\t\t}\n    }\n}\n\nvec3 SetSat(vec3 C, float s) {\n\tfloat Cmax = max(C.r, max(C.g, C.b));\n\tfloat Cmin = min(C.r, min(C.g, C.b));\n\tfloat Cmid = middleOfThree(C.r, C.g, C.b);\n\n\tint minIndex, midIndex, maxIndex;\n\n\tif (Cmax > Cmin) {\n\t\tCmid = (((Cmid - Cmin) * s) / (Cmax - Cmin));\n\t\tCmax = s;\n\t} else {\n\t\tCmid = Cmax = 0.0;\n\t}\n\tCmin = 0.0;\n\n\tif (C.r < C.g) {\n\t\tif (C.r < C.b) {\n\t\t\tC.r = Cmin;\n\t\t\tif (C.g > C.b) {\n\t\t\t\tC.g = Cmax;\n\t\t\t\tC.b = Cmid;\n\t\t\t} else {\n\t\t\t\tC.g = Cmid;\n\t\t\t\tC.b = Cmax;\n\t\t\t}\n\t\t} else {\n\t\t\tC.r = Cmid;\n\t\t\tif (C.g < C.b) {\n\t\t\t\tC.g = Cmin;\n\t\t\t\tC.b = Cmax;\n\t\t\t} else {\n\t\t\t\tC.g = Cmax;\n\t\t\t\tC.b = Cmin;\n\t\t\t}\n\t\t}\n\t} else {\n\t\tif (C.r < C.b) {\n\t\t\tC.r = Cmid;\n\t\t\tC.g = Cmin;\n\t\t\tC.b = Cmax;\n\t\t} else {\n\t\t\tif (C.g > C.b) {\n\t\t\t\tC.g = Cmid;\n\t\t\t\tC.b = Cmin;\n\t\t\t} else {\n\t\t\t\tC.g = Cmin;\n\t\t\t\tC.b = Cmid;\n\t\t\t}\n\t\t\tC.r = Cmax;\n\t\t}\n\t}\n\n\treturn C;\n}\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    //reverse hardlight\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    //yeah, premultiplied\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t// Formula from https://drafts.fxtf.org/compositing/#blendingcolor\n\t// B(Cb, Cs) = SetLum(SetSat(Cb, Sat(Cs)), Lum(Cb))\n\n\tvec3 Cm = SetLum(SetSat(Cb, Sat(Cs)), Lum(Cb));\n\n\t\n    vec4 res;\n    res.xyz = (1.0 - source.a) * Cs + source.a * Cm;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var SaturationShader = (function (_super) {
+        __extends(SaturationShader, _super);
+        function SaturationShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, overlayFrag, tilingMode) || this;
+        }
+        return SaturationShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.SaturationShader = SaturationShader;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var softLightFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n \nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n    \n    vec3 first = Cb - (1.0 - 2.0 * Cs) * Cb * (1.0 - Cb);\n\n    vec3 B;\n    vec3 D;\n    if (Cs.r <= 0.5)\n    {\n        B.r = first.r;\n    }\n    else\n    {\n        if (Cb.r <= 0.25)\n        {\n            D.r = ((16.0 * Cb.r - 12.0) * Cb.r + 4.0) * Cb.r;    \n        }\n        else\n        {\n            D.r = sqrt(Cb.r);\n        }\n        B.r = Cb.r + (2.0 * Cs.r - 1.0) * (D.r - Cb.r);\n    }\n    if (Cs.g <= 0.5)\n    {\n        B.g = first.g;\n    }\n    else\n    {\n        if (Cb.g <= 0.25)\n        {\n            D.g = ((16.0 * Cb.g - 12.0) * Cb.g + 4.0) * Cb.g;    \n        }\n        else\n        {\n            D.g = sqrt(Cb.g);\n        }\n        B.g = Cb.g + (2.0 * Cs.g - 1.0) * (D.g - Cb.g);\n    }\n    if (Cs.b <= 0.5)\n    {\n        B.b = first.b;\n    }\n    else\n    {\n        if (Cb.b <= 0.25)\n        {\n            D.b = ((16.0 * Cb.b - 12.0) * Cb.b + 4.0) * Cb.b;    \n        }\n        else\n        {\n            D.b = sqrt(Cb.b);\n        }\n        B.b = Cb.b + (2.0 * Cs.b - 1.0) * (D.b - Cb.b);\n    }   \n\n    vec4 res;\n\n    res.xyz = (1.0 - source.a) * Cs + source.a * B;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
     var SoftLightShader = (function (_super) {
         __extends(SoftLightShader, _super);
         function SoftLightShader(gl, tilingMode) {

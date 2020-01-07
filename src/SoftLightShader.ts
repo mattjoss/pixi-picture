@@ -18,10 +18,10 @@ void main(void)
         gl_FragColor = vec4(0, 0, 0, 0);
         return;
     }
-    vec3 Cb = source.rgb/source.a, Cs;
+    vec3 Cs = source.rgb/source.a, Cb;
     if (target.a > 0.0) {
-        Cs = target.rgb / target.a;
-    }
+        Cb = target.rgb / target.a;
+	}
     
     vec3 first = Cb - (1.0 - 2.0 * Cs) * Cb * (1.0 - Cb);
 

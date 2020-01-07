@@ -21,6 +21,10 @@ namespace pixi_picture {
 	    array[PIXI.BLEND_MODES.LINEAR_BURN] = [new LinearBurnShader(gl, 0), new LinearBurnShader(gl, 1), new LinearBurnShader(gl, 2)];
 	    array[PIXI.BLEND_MODES.LINEAR_LIGHT] = [new LinearLightShader(gl, 0), new LinearLightShader(gl, 1), new LinearLightShader(gl, 2)];
 
+	    array[PIXI.BLEND_MODES.HUE] = [new HueShader(gl, 0), new HueShader(gl, 1), new HueShader(gl, 2)];
+	    array[PIXI.BLEND_MODES.SATURATION] = [new SaturationShader(gl, 0), new SaturationShader(gl, 1), new SaturationShader(gl, 2)];
+	    array[PIXI.BLEND_MODES.DIFFERENCE] = [new DifferenceShader(gl, 0), new DifferenceShader(gl, 1), new DifferenceShader(gl, 2)];
+
         return array;
     }
 }

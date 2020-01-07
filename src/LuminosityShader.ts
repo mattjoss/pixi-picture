@@ -51,9 +51,9 @@ void main(void)
         return;
     }
     //yeah, premultiplied
-    vec3 Cb = source.rgb/source.a, Cs;
+    vec3 Cs = source.rgb/source.a, Cb;
     if (target.a > 0.0) {
-        Cs = target.rgb / target.a;
+        Cb = target.rgb / target.a;
 	}
 	
 	// Formula from https://drafts.fxtf.org/compositing/#blendingcolor

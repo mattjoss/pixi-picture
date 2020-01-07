@@ -1,5 +1,38 @@
 /// <reference types="pixi.js" />
-declare module PIXI.picture {
+declare namespace pixi_picture {
+    class PictureShader extends PIXI.Shader {
+        tempQuad: PIXI.Quad;
+        tilingMode: number;
+        static blendVert: string;
+        constructor(gl: WebGLRenderingContext, vert: string, frag: string, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class ColorBurnShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class ColorDodgeShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class ColorShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class DarkenShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class DifferenceShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
     function filterManagerMixin(fm: PIXI.FilterManager): void;
     class BackdropFilter<T> extends PIXI.Filter<T> {
         backdropUniformName: string;
@@ -8,25 +41,55 @@ declare module PIXI.picture {
         uniformData: PIXI.UniformDataMap<T>;
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     class HardLightShader extends PictureShader {
         constructor(gl: WebGLRenderingContext, tilingMode: number);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
+    class HueShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class LightenShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class LinearBurnShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class LinearDodgeShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class LinearLightShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
+    class LuminosityShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
     function mapFilterBlendModesToPixi(gl: WebGLRenderingContext, array?: Array<Array<PictureShader>>): Array<Array<PictureShader>>;
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     class NormalShader extends PictureShader {
         constructor(gl: WebGLRenderingContext, tilingMode: number);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     class OverlayShader extends PictureShader {
         constructor(gl: WebGLRenderingContext, tilingMode: number);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     import Sprite = PIXI.Sprite;
     import TilingSprite = PIXI.extras.TilingSprite;
     class PictureRenderer extends PIXI.ObjectRenderer {
@@ -56,28 +119,25 @@ declare module PIXI.picture {
         _isSimpleSprite(ts: Sprite): boolean;
     }
 }
-declare module PIXI.picture {
-    class PictureShader extends PIXI.Shader {
-        tempQuad: PIXI.Quad;
-        tilingMode: number;
-        static blendVert: string;
-        constructor(gl: WebGLRenderingContext, vert: string, frag: string, tilingMode: number);
+declare namespace pixi_picture {
+    class SaturationShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     class SoftLightShader extends PictureShader {
         constructor(gl: WebGLRenderingContext, tilingMode: number);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     class Sprite extends PIXI.Sprite {
         constructor(texture: PIXI.Texture);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
     class TilingSprite extends PIXI.extras.TilingSprite {
         constructor(texture: PIXI.Texture);
     }
 }
-declare module PIXI.picture {
+declare namespace pixi_picture {
 }

@@ -38,7 +38,90 @@ vec3 SetLum(vec3 C, float l) {
 	C.b = C.b + d;
 	return ClipColor(C);
 }
-	
+
+float Sat(vec3 C) {
+	return (max(C.r, max(C.g, C.b)) - min(C.r, min(C.g, C.b)));
+}
+
+// Find middle number of 3 numbers
+float middleOfThree(float a, float b, float c)
+{
+    if (a > b)
+    {
+		if (b > c) {
+            return b;
+		} else if (a > c) {
+            return c;
+		} else {
+            return a;
+		}
+    }
+    else
+    {
+		if (a > c) {
+            return a;
+		} else if (b > c) {
+            return c;
+		} else {
+            return b;
+		}
+    }
+}
+
+vec3 SetSat(vec3 C, float s) {
+	float Cmax = max(C.r, max(C.g, C.b));
+	float Cmin = min(C.r, min(C.g, C.b));
+	float Cmid = middleOfThree(C.r, C.g, C.b);
+
+	int minIndex, midIndex, maxIndex;
+
+	if (Cmax > Cmin) {
+		Cmid = (((Cmid - Cmin) * s) / (Cmax - Cmin));
+		Cmax = s;
+	} else {
+		Cmid = Cmax = 0.0;
+	}
+	Cmin = 0.0;
+
+	if (C.r < C.g) {
+		if (C.r < C.b) {
+			C.r = Cmin;
+			if (C.g > C.b) {
+				C.g = Cmax;
+				C.b = Cmid;
+			} else {
+				C.g = Cmid;
+				C.b = Cmax;
+			}
+		} else {
+			C.r = Cmid;
+			if (C.g < C.b) {
+				C.g = Cmin;
+				C.b = Cmax;
+			} else {
+				C.g = Cmax;
+				C.b = Cmin;
+			}
+		}
+	} else {
+		if (C.r < C.b) {
+			C.r = Cmid;
+			C.g = Cmin;
+			C.b = Cmax;
+		} else {
+			if (C.g > C.b) {
+				C.g = Cmid;
+				C.b = Cmin;
+			} else {
+				C.g = Cmin;
+				C.b = Cmid;
+			}
+			C.r = Cmax;
+		}
+	}
+
+	return C;
+}
 
 void main(void)
 {
@@ -58,9 +141,9 @@ void main(void)
 	}
 	
 	// Formula from https://drafts.fxtf.org/compositing/#blendingcolor
-	// SetLum(Cs, Lum(Cb))
+	// B(Cb, Cs) = SetLum(SetSat(Cb, Sat(Cs)), Lum(Cb))
 
-	vec3 Cm = SetLum(Cs, Lum(Cb));
+	vec3 Cm = SetLum(SetSat(Cb, Sat(Cs)), Lum(Cb));
 
 	
     vec4 res;
@@ -77,7 +160,7 @@ void main(void)
      * @param gl {PIXI.Shader} The WebGL shader manager this shader works for.
      * @param tilingMode {number} 0 for default, 1 for simple tiling, 2 for tiling
      */
-    export class ColorShader extends PictureShader {
+    export class SaturationShader extends PictureShader {
         constructor(gl: WebGLRenderingContext, tilingMode: number) {
             super(gl, PictureShader.blendVert, overlayFrag, tilingMode);
         }

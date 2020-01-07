@@ -26,12 +26,11 @@ void main(void)
         Cb = target.rgb / target.a;
 	}
 	
-	// Formula from here http://www.simplefilter.de/en/basics/mixmods.html
-	// C = A + B - 1
-	vec3 Cm = Cs + Cb - 1.0;
+	// B(Cb, Cs) = | Cb - Cs |
 	
+	vec3 Cm = abs(Cb - Cs);
 	
-	vec4 res;
+    vec4 res;
     res.xyz = (1.0 - source.a) * Cs + source.a * Cm;
     res.a = source.a + target.a * (1.0-source.a);
     gl_FragColor = vec4(res.xyz * res.a, res.a);
@@ -45,7 +44,7 @@ void main(void)
      * @param gl {PIXI.Shader} The WebGL shader manager this shader works for.
      * @param tilingMode {number} 0 for default, 1 for simple tiling, 2 for tiling
      */
-    export class LinearBurnShader extends PictureShader {
+    export class DifferenceShader extends PictureShader {
         constructor(gl: WebGLRenderingContext, tilingMode: number) {
             super(gl, PictureShader.blendVert, overlayFrag, tilingMode);
         }

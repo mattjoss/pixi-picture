@@ -16,16 +16,15 @@ void main(void)
     vec4 source = texture2D(uSampler[0], textureCoord) * uColor;
     vec4 target = texture2D(uSampler[1], vMapCoord);
 
-    //reverse hardlight
     if (source.a == 0.0) {
         gl_FragColor = vec4(0, 0, 0, 0);
         return;
     }
     //yeah, premultiplied
-    vec3 Cb = source.rgb/source.a, Cs;
+    vec3 Cs = source.rgb/source.a, Cb;
     if (target.a > 0.0) {
-        Cs = target.rgb / target.a;
-    }
+        Cb = target.rgb / target.a;
+	}
     vec3 darken = min(Cb, Cs);
     vec4 res;
     res.xyz = (1.0 - source.a) * Cs + source.a * darken;
