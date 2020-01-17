@@ -4,6 +4,7 @@ namespace pixi_picture {
         PIXI.BLEND_MODES.LINEAR_DODGE = 20;
         PIXI.BLEND_MODES.LINEAR_BURN = 21;
         PIXI.BLEND_MODES.LINEAR_LIGHT = 22;
+        PIXI.BLEND_MODES.VIVID_LIGHT = 23;
 
         //TODO - premultiply alpha would be different.
         //add a boolean for that!
@@ -24,6 +25,7 @@ namespace pixi_picture {
 	    array[PIXI.BLEND_MODES.HUE] = [new HueShader(gl, 0), new HueShader(gl, 1), new HueShader(gl, 2)];
 	    array[PIXI.BLEND_MODES.SATURATION] = [new SaturationShader(gl, 0), new SaturationShader(gl, 1), new SaturationShader(gl, 2)];
 	    array[PIXI.BLEND_MODES.DIFFERENCE] = [new DifferenceShader(gl, 0), new DifferenceShader(gl, 1), new DifferenceShader(gl, 2)];
+	    array[PIXI.BLEND_MODES.VIVID_LIGHT] = [new VividLightShader(gl, 0), new VividLightShader(gl, 1), new VividLightShader(gl, 2)];
 
         return array;
     }

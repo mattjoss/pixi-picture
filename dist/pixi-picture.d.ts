@@ -140,4 +140,9 @@ declare namespace pixi_picture {
     }
 }
 declare namespace pixi_picture {
+    class VividLightShader extends PictureShader {
+        constructor(gl: WebGLRenderingContext, tilingMode: number);
+    }
+}
+declare namespace pixi_picture {
 }

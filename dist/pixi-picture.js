@@ -454,6 +454,7 @@ var pixi_picture;
         PIXI.BLEND_MODES.LINEAR_DODGE = 20;
         PIXI.BLEND_MODES.LINEAR_BURN = 21;
         PIXI.BLEND_MODES.LINEAR_LIGHT = 22;
+        PIXI.BLEND_MODES.VIVID_LIGHT = 23;
         array[PIXI.BLEND_MODES.OVERLAY] = [new pixi_picture.OverlayShader(gl, 0), new pixi_picture.OverlayShader(gl, 1), new pixi_picture.OverlayShader(gl, 2)];
         array[PIXI.BLEND_MODES.HARD_LIGHT] = [new pixi_picture.HardLightShader(gl, 0), new pixi_picture.HardLightShader(gl, 1), new pixi_picture.HardLightShader(gl, 2)];
         array[PIXI.BLEND_MODES.SOFT_LIGHT] = [new pixi_picture.SoftLightShader(gl, 0), new pixi_picture.SoftLightShader(gl, 1), new pixi_picture.SoftLightShader(gl, 2)];
@@ -469,6 +470,7 @@ var pixi_picture;
         array[PIXI.BLEND_MODES.HUE] = [new pixi_picture.HueShader(gl, 0), new pixi_picture.HueShader(gl, 1), new pixi_picture.HueShader(gl, 2)];
         array[PIXI.BLEND_MODES.SATURATION] = [new pixi_picture.SaturationShader(gl, 0), new pixi_picture.SaturationShader(gl, 1), new pixi_picture.SaturationShader(gl, 2)];
         array[PIXI.BLEND_MODES.DIFFERENCE] = [new pixi_picture.DifferenceShader(gl, 0), new pixi_picture.DifferenceShader(gl, 1), new pixi_picture.DifferenceShader(gl, 2)];
+        array[PIXI.BLEND_MODES.VIVID_LIGHT] = [new pixi_picture.VividLightShader(gl, 0), new pixi_picture.VividLightShader(gl, 1), new pixi_picture.VividLightShader(gl, 2)];
         return array;
     }
     pixi_picture.mapFilterBlendModesToPixi = mapFilterBlendModesToPixi;
@@ -833,6 +835,18 @@ var pixi_picture;
         return TilingSprite;
     }(PIXI.extras.TilingSprite));
     pixi_picture.TilingSprite = TilingSprite;
+})(pixi_picture || (pixi_picture = {}));
+var pixi_picture;
+(function (pixi_picture) {
+    var vivdLightFrag = "\nvarying vec2 vTextureCoord;\nvarying vec2 vMapCoord;\nvarying vec4 vColor;\n\nuniform sampler2D uSampler[2];\nuniform vec4 uColor;\n%SPRITE_UNIFORMS%\n\nfloat flip(float v) {\n  return 1.0-v;\n}\n\nfloat saturate(float v) {\n  return clamp(v,0.0,1.0);\n}\n\nfloat ps(float D, float S) {\n    if(S < 0.5) {\n        if(S==0.0) return 0.0;\n        return flip( saturate( flip(D) / (2.0*S) ) );\n    } else {\n        if(S==1.0) return 1.0;\n        return saturate( D/(flip(2.0*(S-0.5)) ) );\n    }\n}\n\nvec4 normal_blend(vec4 a, vec4 b) {\n\n  if(a.a==0.0) {\n    return b;\n  }\n\n  float alpha=a.a+b.a-a.a*b.a;\n  vec3 c = (a.a*a.rgb+b.a*b.rgb*(1.0-a.a))/alpha;\n  return vec4(c.r,c.g,c.b,alpha);\n}\n\n\n\n// // this is the most commonly listed formula on the web.\n// // as best as i can tell, it's simply wrong.\n// float pixmath(float blend, float base) {\n//     if(blend>0.5) {\n//         return 1.0 - saturate((1.0-base)/(2.0*(blend-0.5)));\n//     } else {\n//         return saturate(base/(1.0-2.0*blend));\n//     }\n// }\n//\n// // this is a formula from the obscure website:\n// // http://www.simplefilter.de/en/basics/mixmods.html\n// // it appears to work.\n// float simpel(float A, float B) {\n//     if(A <= 0.5) {\n//         return 1.0 - saturate( (1.0-B)/(2.0*A) );\n//     } else {\n//         return saturate(B/(2.0*(1.0-A)));\n//     }\n// }\n\nvoid main(void)\n{\n    %SPRITE_CODE%\n    vec4 source = texture2D(uSampler[0], textureCoord) * uColor;\n    vec4 target = texture2D(uSampler[1], vMapCoord);\n\n    if (source.a == 0.0) {\n        gl_FragColor = vec4(0, 0, 0, 0);\n        return;\n    }\n    // unpremultiply\n    vec3 Cs = source.rgb/source.a, Cb;\n    if (target.a > 0.0) {\n        Cb = target.rgb / target.a;\n\t}\n\t\n\t\n    vec4 r=vec4( ps(Cs.r, Cb.r), ps(Cs.g, Cb.g), ps(Cs.b, Cb.b), source.a);\n\tvec4 b = vec4(Cb, target.a);\n    vec4 Cm=normal_blend(r, b);\n\n\n\n\n\t\n\t\n\tvec4 res;\n    res.xyz = (1.0 - source.a) * Cb + source.a * Cm.rgb;\n    res.a = source.a + target.a * (1.0-source.a);\n    gl_FragColor = vec4(res.xyz * res.a, res.a);\n}\n";
+    var VividLightShader = (function (_super) {
+        __extends(VividLightShader, _super);
+        function VividLightShader(gl, tilingMode) {
+            return _super.call(this, gl, pixi_picture.PictureShader.blendVert, vivdLightFrag, tilingMode) || this;
+        }
+        return VividLightShader;
+    }(pixi_picture.PictureShader));
+    pixi_picture.VividLightShader = VividLightShader;
 })(pixi_picture || (pixi_picture = {}));
 var pixi_picture;
 (function (pixi_picture) {
