@@ -79,8 +79,8 @@ void main(void)
 	}
 	
 	
-    vec4 r=vec4( ps(Cs.r, Cb.r), ps(Cs.g, Cb.g), ps(Cs.b, Cb.b), source.a);
-	vec4 b = vec4(Cb, target.a);
+    vec4 r=vec4( ps(Cb.r, Cs.r), ps(Cb.g, Cs.g), ps(Cb.b, Cs.b), source.a);
+	vec4 b = vec4(Cs, target.a);
     vec4 Cm=normal_blend(r, b);
 
 
